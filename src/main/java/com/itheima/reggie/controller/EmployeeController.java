@@ -12,14 +12,16 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 
 @Slf4j
 @RestController
-@RequestMapping("/employee")
+@RequestMapping(value = "/employee")
 public class EmployeeController {
 
-    @Autowired
+    // @Autowired  不推荐
+    @Resource
     private EmployeeService employeeService;
 
     /**
@@ -28,36 +30,37 @@ public class EmployeeController {
      * @param employee
      * @return
      */
-    @PostMapping("/login")
-    public R<Employee> login(HttpServletRequest request,@RequestBody Employee employee){
-
-        //1、将页面提交的密码password进行md5加密处理
-        String password = employee.getPassword();
-        password = DigestUtils.md5DigestAsHex(password.getBytes());
-
-        //2、根据页面提交的用户名username查询数据库
-        LambdaQueryWrapper<Employee> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(Employee::getUsername,employee.getUsername());
-        Employee emp = employeeService.getOne(queryWrapper);
-
-        //3、如果没有查询到则返回登录失败结果
-        if(emp == null){
+    @PostMapping(value = "/login")
+    public R<Employee> login(HttpServletRequest request, @RequestBody Employee employee) {
+        // 后续还是要改成规范 -- 既在控制器中不能出现业务相关的代码，而应该封装在service
+        // 1.获取前端传过来的用户password，并进行md5加密
+        String password = DigestUtils.md5DigestAsHex(employee.getPassword().getBytes());
+        // 2.根据用户username查询数据库
+        Employee emp = employeeService.getOne(new LambdaQueryWrapper<Employee>()
+                .eq(Employee::getUsername, employee.getUsername()));
+        if (emp != null && password.equals(emp.getPassword()) && emp.getStatus() == 1) {
+            request.getSession().setAttribute("employee", emp.getId());
+            return R.success(emp);
+        } else {
             return R.error("登录失败");
         }
-
-        //4、密码比对，如果不一致则返回登录失败结果
-        if(!emp.getPassword().equals(password)){
-            return R.error("登录失败");
-        }
-
-        //5、查看员工状态，如果为已禁用状态，则返回员工已禁用结果
-        if(emp.getStatus() == 0){
-            return R.error("账号已禁用");
-        }
-
-        //6、登录成功，将员工id存入Session并返回登录成功结果
-        request.getSession().setAttribute("employee",emp.getId());
-        return R.success(emp);
+//        // 感觉下面这样写不太好，因为除了这些验证可能还有其他意想不到的错误
+//        // 所以用那个唯一验证正确的条件判断比较好
+//        // 3.判读查询结果是否为空
+//        if (emp == null) {
+//            return R.error("登录失败");
+//        }
+//        // 4.判断密码是否正确
+//        if (!password.equals(emp.getPassword())) {
+//            return R.error("登录失败");
+//        }
+//        // 5.查看用户状态是否禁用
+//        if (emp.getStatus() == 0) {
+//            return R.error("账号已禁用");
+//        }
+//        // 登录成功，将员工id存入Session并返回登录成功结果
+//        request.getSession().setAttribute("employee", emp.getId());
+//        return R.success(emp);
     }
 
     /**
